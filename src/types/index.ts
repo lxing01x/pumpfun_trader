@@ -1,11 +1,11 @@
 export interface TokenData {
   mintAddress: string;
-  symbol: string;
-  name: string;
   currentPrice: number;
   lastPrice: number;
   volume24h: number;
   volume10m: number;
+  volume30s: number;
+  priceChangePercent30s: number;
   priceChangePercent1m: number;
   priceChangePercent5m: number;
   priceChangePercent10m: number;
