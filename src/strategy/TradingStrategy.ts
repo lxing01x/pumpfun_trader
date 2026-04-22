@@ -1,4 +1,4 @@
-import { TradingStrategyParams } from '../config';
+import { TradingStrategyParams, FeeConfig, configManager } from '../config';
 import { TokenData, Position, ClosedPosition } from '../types';
 import { EventEmitter } from 'events';
 
@@ -40,12 +40,19 @@ export interface ExtendedPosition extends Position {
 
 export class TradingStrategy extends EventEmitter {
   private params: TradingStrategyParams;
+  private fees: FeeConfig;
   private positions: Map<string, ExtendedPosition> = new Map();
   private closedPositions: ClosedPosition[] = [];
 
-  constructor(params: TradingStrategyParams) {
+  constructor(params: TradingStrategyParams, fees?: FeeConfig) {
     super();
     this.params = { ...params };
+    this.fees = fees ? { ...fees } : configManager.fees;
+  }
+
+  public updateFees(fees: Partial<FeeConfig>): void {
+    this.fees = { ...this.fees, ...fees };
+    console.log('Trading strategy fees updated:', this.fees);
   }
 
   public updateParams(params: Partial<TradingStrategyParams>): void {
@@ -324,12 +331,34 @@ export class TradingStrategy extends EventEmitter {
     return sellSignals;
   }
 
+  private calculateBuyFee(amount: number, price: number): { feeAmount: number; feePercent: number } {
+    if (!this.fees.enableFees) {
+      return { feeAmount: 0, feePercent: 0 };
+    }
+    const feePercent = this.fees.buyFeePercent;
+    const investmentValue = amount * price;
+    const feeAmount = investmentValue * (feePercent / 100);
+    return { feeAmount, feePercent };
+  }
+
+  private calculateSellFee(amount: number, price: number): { feeAmount: number; feePercent: number } {
+    if (!this.fees.enableFees) {
+      return { feeAmount: 0, feePercent: 0 };
+    }
+    const feePercent = this.fees.sellFeePercent;
+    const sellValue = amount * price;
+    const feeAmount = sellValue * (feePercent / 100);
+    return { feeAmount, feePercent };
+  }
+
   public openPosition(
     tokenMint: string,
     entryPrice: number,
     amount: number
   ): Position {
     const positionId = `pos_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+    const { feeAmount: buyFeeAmount, feePercent: buyFeePercent } = this.calculateBuyFee(amount, entryPrice);
 
     const position: ExtendedPosition = {
       id: positionId,
@@ -345,22 +374,24 @@ export class TradingStrategy extends EventEmitter {
       partialSold: false,
       partialSoldAmount: 0,
       trailingStopPrice: 0,
+      buyFeeAmount,
+      buyFeePercent,
     };
 
     this.positions.set(positionId, position);
     
-    const shortMint = tokenMint.length > 8 
-      ? `${tokenMint.substring(0, 4)}...${tokenMint.substring(tokenMint.length - 4)}` 
-      : tokenMint;
-    
     console.log(`\n[OPEN POSITION] ${positionId}`);
-    console.log(`  Token: ${shortMint}`);
+    console.log(`  Token: ${tokenMint}`);
     console.log(`  Entry Price: ${entryPrice.toExponential(4)}`);
     console.log(`  Amount: ${amount}`);
     console.log(`  Stop Loss: ${position.stopLossPrice.toExponential(4)} (-${this.params.stopLossPercent}%)`);
     console.log(`  Take Profit: ${position.takeProfitPrice.toExponential(4)} (+${this.params.takeProfitPercent}%)`);
     console.log(`  Trailing Stop: ${this.params.enableTrailingStop ? `Enabled (${this.params.trailingStopPercent}%)` : 'Disabled'}`);
-    console.log(`  Partial Take Profit: ${this.params.enablePartialTakeProfit ? `Enabled at ${this.params.partialTakeProfitPercent}%` : 'Disabled'}\n`);
+    console.log(`  Partial Take Profit: ${this.params.enablePartialTakeProfit ? `Enabled at ${this.params.partialTakeProfitPercent}%` : 'Disabled'}`);
+    if (this.fees.enableFees) {
+      console.log(`  Buy Fee: ${buyFeeAmount.toFixed(6)} SOL (${buyFeePercent}%)`);
+    }
+    console.log('');
 
     return position;
   }
@@ -383,6 +414,17 @@ export class TradingStrategy extends EventEmitter {
     const profitLoss = (exitPrice - position.entryPrice) * sellAmount;
     const profitLossPercent = ((exitPrice - position.entryPrice) / position.entryPrice) * 100;
 
+    const { feeAmount: sellFeeAmount, feePercent: sellFeePercent } = this.calculateSellFee(sellAmount, exitPrice);
+    const buyFeeAmount = position.buyFeeAmount || 0;
+    const buyFeePercent = position.buyFeePercent || 0;
+    const totalFees = buyFeeAmount + sellFeeAmount;
+
+    const profitLossAfterFees = profitLoss - totalFees;
+    const investmentValue = position.entryPrice * sellAmount;
+    const profitLossPercentAfterFees = investmentValue > 0 
+      ? (profitLossAfterFees / investmentValue) * 100 
+      : 0;
+
     const closedPosition: ClosedPosition = {
       id: `${positionId}_${Date.now()}`,
       tokenMint: position.tokenMint,
@@ -395,19 +437,28 @@ export class TradingStrategy extends EventEmitter {
       holdTimeMinutes,
       profitLoss,
       profitLossPercent,
+      profitLossAfterFees,
+      profitLossPercentAfterFees,
+      buyFeeAmount,
+      buyFeePercent,
+      sellFeeAmount,
+      sellFeePercent,
+      totalFees,
       exitReason: reason,
     };
 
-    const shortMint = position.tokenMint.length > 8 
-      ? `${position.tokenMint.substring(0, 4)}...${position.tokenMint.substring(position.tokenMint.length - 4)}` 
-      : position.tokenMint;
-
     if (isPartial) {
       console.log(`\n[PARTIAL CLOSE] ${positionId}`);
-      console.log(`  Token: ${shortMint}`);
+      console.log(`  Token: ${position.tokenMint}`);
       console.log(`  Sold: ${(sellRatio * 100).toFixed(0)}% | Amount: ${sellAmount.toFixed(0)}`);
       console.log(`  Exit Price: ${exitPrice.toExponential(4)}`);
-      console.log(`  P/L: ${profitLossPercent >= 0 ? '+' : ''}${profitLossPercent.toFixed(2)}% (${profitLoss.toFixed(6)} SOL)`);
+      console.log(`  P/L Before Fees: ${profitLossPercent >= 0 ? '+' : ''}${profitLossPercent.toFixed(2)}% (${profitLoss.toFixed(6)} SOL)`);
+      if (this.fees.enableFees) {
+        console.log(`  Buy Fee: ${buyFeeAmount.toFixed(6)} SOL (${buyFeePercent}%)`);
+        console.log(`  Sell Fee: ${sellFeeAmount.toFixed(6)} SOL (${sellFeePercent}%)`);
+        console.log(`  Total Fees: ${totalFees.toFixed(6)} SOL`);
+        console.log(`  P/L After Fees: ${profitLossPercentAfterFees >= 0 ? '+' : ''}${profitLossPercentAfterFees.toFixed(2)}% (${profitLossAfterFees.toFixed(6)} SOL)`);
+      }
       console.log(`  Reason: ${reason}\n`);
       
       this.closedPositions.push(closedPosition);
@@ -428,9 +479,15 @@ export class TradingStrategy extends EventEmitter {
     this.positions.delete(positionId);
 
     console.log(`\n[CLOSE POSITION] ${positionId}`);
-    console.log(`  Token: ${shortMint}`);
+    console.log(`  Token: ${position.tokenMint}`);
     console.log(`  Entry: ${position.entryPrice.toExponential(4)} | Exit: ${exitPrice.toExponential(4)}`);
-    console.log(`  P/L: ${profitLossPercent >= 0 ? '+' : ''}${profitLossPercent.toFixed(2)}% (${profitLoss.toFixed(6)} SOL)`);
+    console.log(`  P/L Before Fees: ${profitLossPercent >= 0 ? '+' : ''}${profitLossPercent.toFixed(2)}% (${profitLoss.toFixed(6)} SOL)`);
+    if (this.fees.enableFees) {
+      console.log(`  Buy Fee: ${buyFeeAmount.toFixed(6)} SOL (${buyFeePercent}%)`);
+      console.log(`  Sell Fee: ${sellFeeAmount.toFixed(6)} SOL (${sellFeePercent}%)`);
+      console.log(`  Total Fees: ${totalFees.toFixed(6)} SOL`);
+      console.log(`  P/L After Fees: ${profitLossPercentAfterFees >= 0 ? '+' : ''}${profitLossPercentAfterFees.toFixed(2)}% (${profitLossAfterFees.toFixed(6)} SOL)`);
+    }
     console.log(`  Hold Time: ${holdTimeMinutes.toFixed(2)} min`);
     console.log(`  Reason: ${reason}\n`);
 

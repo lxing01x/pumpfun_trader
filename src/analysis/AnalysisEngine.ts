@@ -41,13 +41,20 @@ export class AnalysisEngine {
         winRate: 0,
         totalProfitLoss: 0,
         totalProfitLossPercent: 0,
+        totalProfitLossAfterFees: 0,
+        totalProfitLossPercentAfterFees: 0,
+        totalFees: 0,
+        profitFactor: 0,
+        averageProfit: 0,
+        averageLoss: 0,
         averageHoldTimeMinutes: 0,
         isProfitable: false,
+        isProfitableAfterFees: false,
       };
     }
 
-    const winningTrades = relevantPositions.filter(p => p.profitLoss > 0);
-    const losingTrades = relevantPositions.filter(p => p.profitLoss <= 0);
+    const winningTrades = relevantPositions.filter(p => (p.profitLossAfterFees || p.profitLoss) > 0);
+    const losingTrades = relevantPositions.filter(p => (p.profitLossAfterFees || p.profitLoss) <= 0);
 
     const totalProfitLoss = relevantPositions.reduce((sum, p) => sum + p.profitLoss, 0);
     const totalProfitLossPercent = 
@@ -55,10 +62,32 @@ export class AnalysisEngine {
         ? relevantPositions.reduce((sum, p) => sum + p.profitLossPercent, 0) / relevantPositions.length 
         : 0;
 
+    const totalProfitLossAfterFees = relevantPositions.reduce((sum, p) => sum + (p.profitLossAfterFees || p.profitLoss), 0);
+    const totalProfitLossPercentAfterFees = 
+      relevantPositions.length > 0 
+        ? relevantPositions.reduce((sum, p) => sum + (p.profitLossPercentAfterFees || p.profitLossPercent), 0) / relevantPositions.length 
+        : 0;
+
+    const totalFees = relevantPositions.reduce((sum, p) => sum + (p.totalFees || 0), 0);
+
+    const totalGrossProfit = winningTrades.reduce((sum, p) => sum + Math.max(p.profitLossAfterFees || p.profitLoss, 0), 0);
+    const totalGrossLoss = Math.abs(losingTrades.reduce((sum, p) => sum + Math.min(p.profitLossAfterFees || p.profitLoss, 0), 0));
+    
+    const profitFactor = totalGrossLoss > 0 ? totalGrossProfit / totalGrossLoss : totalGrossProfit > 0 ? Infinity : 0;
+
+    const averageProfit = winningTrades.length > 0 
+      ? winningTrades.reduce((sum, p) => sum + (p.profitLossAfterFees || p.profitLoss), 0) / winningTrades.length 
+      : 0;
+    const averageLoss = losingTrades.length > 0 
+      ? losingTrades.reduce((sum, p) => sum + (p.profitLossAfterFees || p.profitLoss), 0) / losingTrades.length 
+      : 0;
+
     const averageHoldTimeMinutes = 
       relevantPositions.length > 0 
         ? relevantPositions.reduce((sum, p) => sum + p.holdTimeMinutes, 0) / relevantPositions.length 
         : 0;
+
+    const winRate = relevantPositions.length > 0 ? (winningTrades.length / relevantPositions.length) * 100 : 0;
 
     const result: AnalysisResult = {
       periodStart,
@@ -66,11 +95,18 @@ export class AnalysisEngine {
       totalTrades: relevantPositions.length,
       winningTrades: winningTrades.length,
       losingTrades: losingTrades.length,
-      winRate: relevantPositions.length > 0 ? (winningTrades.length / relevantPositions.length) * 100 : 0,
+      winRate,
       totalProfitLoss,
       totalProfitLossPercent,
+      totalProfitLossAfterFees,
+      totalProfitLossPercentAfterFees,
+      totalFees,
+      profitFactor,
+      averageProfit,
+      averageLoss,
       averageHoldTimeMinutes,
       isProfitable: totalProfitLoss > 0,
+      isProfitableAfterFees: totalProfitLossAfterFees > 0,
     };
 
     console.log('\n' + '='.repeat(60));
@@ -80,9 +116,13 @@ export class AnalysisEngine {
     console.log(`Total Trades: ${result.totalTrades}`);
     console.log(`Winning: ${result.winningTrades}, Losing: ${result.losingTrades}`);
     console.log(`Win Rate: ${result.winRate.toFixed(2)}%`);
-    console.log(`Total P/L: ${result.totalProfitLoss.toFixed(6)} SOL (${result.totalProfitLossPercent.toFixed(2)}%)`);
+    console.log(`Profit Factor: ${result.profitFactor.toFixed(2)}`);
+    console.log(`Total P/L Before Fees: ${result.totalProfitLoss >= 0 ? '+' : ''}${result.totalProfitLoss.toFixed(6)} SOL (${result.totalProfitLossPercent.toFixed(2)}%)`);
+    console.log(`Total P/L After Fees: ${result.totalProfitLossAfterFees >= 0 ? '+' : ''}${result.totalProfitLossAfterFees.toFixed(6)} SOL (${result.totalProfitLossPercentAfterFees.toFixed(2)}%)`);
+    console.log(`Total Fees Paid: ${result.totalFees.toFixed(6)} SOL`);
+    console.log(`Avg Profit: ${result.averageProfit.toFixed(6)} SOL | Avg Loss: ${result.averageLoss.toFixed(6)} SOL`);
     console.log(`Avg Hold Time: ${result.averageHoldTimeMinutes.toFixed(2)} min`);
-    console.log(`Status: ${result.isProfitable ? 'PROFITABLE' : 'LOSING'}`);
+    console.log(`Status (After Fees): ${result.isProfitableAfterFees ? 'PROFITABLE' : 'LOSING'}`);
     console.log('='.repeat(60) + '\n');
 
     return result;
@@ -93,7 +133,7 @@ export class AnalysisEngine {
       console.log('No trades in period, considering parameter adjustment...');
       return true;
     }
-    return !result.isProfitable;
+    return !result.isProfitableAfterFees;
   }
 
   public suggestAdjustments(
@@ -148,7 +188,7 @@ export class AnalysisEngine {
       });
     }
 
-    if (winningTrades > 0 && result.totalProfitLoss < 0) {
+    if (winningTrades > 0 && result.totalProfitLossAfterFees < 0) {
       adjustments.push({
         parameter: 'takeProfitPercent',
         oldValue: currentParams.takeProfitPercent,
@@ -201,10 +241,10 @@ export class AnalysisEngine {
   }
 
   public updateBestParams(params: TradingStrategyParams, result: AnalysisResult): void {
-    if (result.totalProfitLoss > this.tuningState.bestProfit) {
-      this.tuningState.bestProfit = result.totalProfitLoss;
+    if (result.totalProfitLossAfterFees > this.tuningState.bestProfit) {
+      this.tuningState.bestProfit = result.totalProfitLossAfterFees;
       this.tuningState.bestParams = { ...params };
-      console.log(`New best parameters found with P/L: ${result.totalProfitLoss.toFixed(6)}`);
+      console.log(`New best parameters found with P/L (After Fees): ${result.totalProfitLossAfterFees.toFixed(6)} SOL`);
     }
   }
 
@@ -229,9 +269,14 @@ export class AnalysisEngine {
     
     console.log('\nFinal Performance:');
     console.log(`  Win Rate: ${finalResult.winRate.toFixed(2)}%`);
+    console.log(`  Profit Factor: ${finalResult.profitFactor.toFixed(2)}`);
     console.log(`  Total Trades: ${finalResult.totalTrades}`);
-    console.log(`  Total P/L: ${finalResult.totalProfitLoss.toFixed(6)} SOL`);
-    console.log(`  Avg P/L %: ${finalResult.totalProfitLossPercent.toFixed(2)}%`);
+    console.log(`  Winning: ${finalResult.winningTrades}, Losing: ${finalResult.losingTrades}`);
+    console.log(`  Total P/L Before Fees: ${finalResult.totalProfitLoss >= 0 ? '+' : ''}${finalResult.totalProfitLoss.toFixed(6)} SOL (${finalResult.totalProfitLossPercent.toFixed(2)}%)`);
+    console.log(`  Total P/L After Fees: ${finalResult.totalProfitLossAfterFees >= 0 ? '+' : ''}${finalResult.totalProfitLossAfterFees.toFixed(6)} SOL (${finalResult.totalProfitLossPercentAfterFees.toFixed(2)}%)`);
+    console.log(`  Total Fees Paid: ${finalResult.totalFees.toFixed(6)} SOL`);
+    console.log(`  Avg Profit: ${finalResult.averageProfit.toFixed(6)} SOL | Avg Loss: ${finalResult.averageLoss.toFixed(6)} SOL`);
+    console.log(`  Avg Hold Time: ${finalResult.averageHoldTimeMinutes.toFixed(2)} min`);
     
     console.log('\nRecommended Parameters for Live Trading:');
     console.log(JSON.stringify(finalParams, null, 2));
