@@ -26,6 +26,7 @@ export class GRPCClient extends EventEmitter {
   private config: GRPCConfig;
   private isConnected: boolean = false;
   private stream: any = null;
+  private baseSubscribeRequest: SubscribeRequest | null = null;
 
   constructor(config: GRPCConfig) {
     super();
@@ -50,6 +51,26 @@ export class GRPCClient extends EventEmitter {
     }
   }
 
+  private createBaseSubscribeRequest(): SubscribeRequest {
+    return {
+      accounts: {},
+      slots: {},
+      transactions: {
+        pumpFun: {
+          accountInclude: [PUMP_FUN_PROGRAM_ID],
+          accountExclude: [],
+          accountRequired: [],
+        },
+      },
+      transactionsStatus: {},
+      blocks: {},
+      blocksMeta: {},
+      entry: {},
+      accountsDataSlice: [],
+      commitment: CommitmentLevel.CONFIRMED,
+    };
+  }
+
   public async subscribeToTransactions(): Promise<void> {
     if (!this.isConnected || !this.client) {
       throw new Error('Client not connected. Call connect() first.');
@@ -58,26 +79,7 @@ export class GRPCClient extends EventEmitter {
     console.log('Subscribing to Pumpfun transactions...');
     console.log(`Filtering for program: ${PUMP_FUN_PROGRAM_ID}`);
 
-    const request: SubscribeRequest = {
-      accounts: {},
-      slots: {},
-      transactions: {
-        pumpFun: {
-          vote: false,
-          failed: false,
-          accountInclude: [PUMP_FUN_PROGRAM_ID],
-          accountExclude: [],
-          accountRequired: [],
-        },
-      },
-      transactionsStatus: {},
-      entry: {},
-      blocks: {},
-      blocksMeta: {},
-      accountsDataSlice: [],
-      ping: undefined,
-      commitment: CommitmentLevel.CONFIRMED,
-    };
+    this.baseSubscribeRequest = this.createBaseSubscribeRequest();
 
     try {
       this.stream = await this.client.subscribe();
@@ -100,7 +102,7 @@ export class GRPCClient extends EventEmitter {
         this.emit('streamEnd');
       });
 
-      this.stream.write(request);
+      this.stream.write(this.baseSubscribeRequest);
       console.log('Subscription request sent, waiting for transactions...');
     } catch (error) {
       console.error('Failed to subscribe:', error);
@@ -121,8 +123,13 @@ export class GRPCClient extends EventEmitter {
     }
 
     if (data.ping) {
-      if (this.stream) {
-        this.stream.write({ ping: { id: 1 } });
+      if (this.stream && this.baseSubscribeRequest) {
+        const pingRequest: SubscribeRequest = {
+          ...this.baseSubscribeRequest,
+          ping: { id: 1 },
+        };
+        this.stream.write(pingRequest);
+        console.log('Sent ping response to keep connection alive');
       }
     }
   }
@@ -329,6 +336,7 @@ export class GRPCClient extends EventEmitter {
       this.client = null;
     }
     
+    this.baseSubscribeRequest = null;
     this.isConnected = false;
     console.log('Yellowstone gRPC client disconnected');
   }
