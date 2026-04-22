@@ -286,6 +286,7 @@ class PumpfunTrader {
     this.isTradingActive = false;
     this.apiServer.setTradingStatus({
       isRunning: false,
+      startTime: undefined,
     });
 
     console.log('\nSystem will now exit. You can use the optimized parameters for live trading.');
@@ -320,6 +321,7 @@ class PumpfunTrader {
       this.schedulePeriodicAnalysis();
       this.scheduleDetectionTimeout();
 
+      await this.grpcClient.connect();
       await this.grpcClient.subscribeToTransactions();
     }
   }
@@ -347,6 +349,7 @@ class PumpfunTrader {
 
     this.apiServer.setTradingStatus({
       isRunning: false,
+      startTime: undefined,
     });
 
     console.log('Pumpfun Trader stopped.');

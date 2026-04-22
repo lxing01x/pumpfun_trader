@@ -79,6 +79,21 @@ export class TradeRecordManager {
       isProfitable: false,
       totalProfitLoss: 0,
       trades: [],
+      statistics: {
+        totalTrades: 0,
+        winningTrades: 0,
+        losingTrades: 0,
+        winRate: 0,
+        totalProfitLoss: 0,
+        totalProfitLossPercent: 0,
+        totalProfitLossAfterFees: 0,
+        totalProfitLossPercentAfterFees: 0,
+        totalFees: 0,
+        profitFactor: 0,
+        averageProfit: 0,
+        averageLoss: 0,
+        averageHoldTimeMinutes: 0,
+      },
     };
 
     console.log(`Started new trading session: ${sessionId}`);
