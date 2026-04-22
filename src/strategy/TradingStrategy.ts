@@ -354,18 +354,20 @@ export class TradingStrategy extends EventEmitter {
   public openPosition(
     tokenMint: string,
     entryPrice: number,
-    amount: number
+    investmentSOL: number
   ): Position {
     const positionId = `pos_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-    const { feeAmount: buyFeeAmount, feePercent: buyFeePercent } = this.calculateBuyFee(amount, entryPrice);
+    const tokenAmount = entryPrice > 0 ? investmentSOL / entryPrice : 0;
+
+    const { feeAmount: buyFeeAmount, feePercent: buyFeePercent } = this.calculateBuyFee(tokenAmount, entryPrice);
 
     const position: ExtendedPosition = {
       id: positionId,
       tokenMint,
       tokenSymbol: '',
       entryPrice,
-      amount,
+      amount: tokenAmount,
       entryTimestamp: Date.now(),
       currentPrice: entryPrice,
       stopLossPrice: entryPrice * (1 - this.params.stopLossPercent / 100),
@@ -382,8 +384,9 @@ export class TradingStrategy extends EventEmitter {
     
     console.log(`\n[OPEN POSITION] ${positionId}`);
     console.log(`  Token: ${tokenMint}`);
-    console.log(`  Entry Price: ${entryPrice.toExponential(4)}`);
-    console.log(`  Amount: ${amount}`);
+    console.log(`  Entry Price: ${entryPrice.toExponential(4)} SOL/token`);
+    console.log(`  Investment: ${investmentSOL.toFixed(6)} SOL`);
+    console.log(`  Token Amount: ${tokenAmount.toFixed(0)}`);
     console.log(`  Stop Loss: ${position.stopLossPrice.toExponential(4)} (-${this.params.stopLossPercent}%)`);
     console.log(`  Take Profit: ${position.takeProfitPrice.toExponential(4)} (+${this.params.takeProfitPercent}%)`);
     console.log(`  Trailing Stop: ${this.params.enableTrailingStop ? `Enabled (${this.params.trailingStopPercent}%)` : 'Disabled'}`);
