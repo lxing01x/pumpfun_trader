@@ -449,6 +449,18 @@
             <div class="stat-value" id="statAvgLoss">0.000000 SOL</div>
           </div>
           <div class="stat-item neutral">
+            <div class="stat-label">总买入次数</div>
+            <div class="stat-value" id="statTotalBuyTrades">0</div>
+          </div>
+          <div class="stat-item neutral">
+            <div class="stat-label">总投入金额</div>
+            <div class="stat-value" id="statTotalInvestment">0.000000 SOL</div>
+          </div>
+          <div class="stat-item neutral">
+            <div class="stat-label">总买入手续费</div>
+            <div class="stat-value" id="statTotalBuyFees">0.000000 SOL</div>
+          </div>
+          <div class="stat-item neutral">
             <div class="stat-label">当前持仓数</div>
             <div class="stat-value" id="statOpenPositions">0</div>
           </div>
@@ -498,6 +510,8 @@
                 <th>Mint 地址</th>
                 <th>入场价格</th>
                 <th>当前价格</th>
+                <th>持仓数量</th>
+                <th>投入金额 (SOL)</th>
                 <th>止损价格</th>
                 <th>止盈价格</th>
                 <th>入场时间</th>
@@ -677,6 +691,10 @@
       document.getElementById('statAvgHoldTime').textContent = (stats.averageHoldTimeMinutes || 0).toFixed(2) + ' min';
       document.getElementById('statAvgProfit').textContent = (stats.averageProfit || 0).toFixed(6) + ' SOL';
       document.getElementById('statAvgLoss').textContent = (stats.averageLoss || 0).toFixed(6) + ' SOL';
+
+      document.getElementById('statTotalBuyTrades').textContent = stats.totalBuyTrades || 0;
+      document.getElementById('statTotalInvestment').textContent = (stats.totalInvestment || 0).toFixed(6) + ' SOL';
+      document.getElementById('statTotalBuyFees').textContent = (stats.totalBuyFees || 0).toFixed(6) + ' SOL';
     }
 
     async function loadConfig() {
@@ -867,18 +885,22 @@
 
       if (result.success && result.data && result.data.length > 0) {
         noData.style.display = 'none';
-        tableBody.innerHTML = result.data.map(pos => `
+        tableBody.innerHTML = result.data.map(pos => {
+          const investment = pos.entryPrice * pos.amount;
+          return `
           <tr>
             <td>${pos.id}</td>
             <td class="mint-address">${pos.tokenMint}</td>
             <td>${pos.entryPrice.toExponential(4)}</td>
             <td>${pos.currentPrice.toExponential(4)}</td>
+            <td>${pos.amount.toFixed(0)}</td>
+            <td>${investment.toFixed(6)}</td>
             <td>${pos.stopLossPrice.toExponential(4)}</td>
             <td>${pos.takeProfitPrice.toExponential(4)}</td>
             <td>${new Date(pos.entryTimestamp).toLocaleString()}</td>
             <td>${pos.buyFeeAmount ? pos.buyFeeAmount.toFixed(6) + ' SOL' : '0.000000 SOL'}</td>
           </tr>
-        `).join('');
+        `}).join('');
       } else {
         noData.style.display = 'block';
         tableBody.innerHTML = '';
