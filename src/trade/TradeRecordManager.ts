@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { SimulatedTrade, ClosedPosition, Position } from '../types';
+import { TradingStrategyParams } from '../config';
 
 export interface TradeRecord {
   id: string;
@@ -22,8 +23,8 @@ export interface TradingSession {
   sessionId: string;
   startTime: number;
   endTime?: number;
-  initialParams: Record<string, number>;
-  finalParams?: Record<string, number>;
+  initialParams: TradingStrategyParams;
+  finalParams?: TradingStrategyParams;
   isProfitable: boolean;
   totalProfitLoss: number;
   trades: TradeRecord[];
@@ -44,7 +45,7 @@ export class TradeRecordManager {
     }
   }
 
-  public startNewSession(params: Record<string, number>): TradingSession {
+  public startNewSession(params: TradingStrategyParams): TradingSession {
     const sessionId = `session_${Date.now()}`;
     
     this.currentSession = {
@@ -131,7 +132,7 @@ export class TradeRecordManager {
     this.currentSession.isProfitable = totalProfitLoss > 0;
   }
 
-  public endSession(finalParams?: Record<string, number>): TradingSession | null {
+  public endSession(finalParams?: TradingStrategyParams): TradingSession | null {
     if (!this.currentSession) return null;
 
     this.currentSession.endTime = Date.now();
