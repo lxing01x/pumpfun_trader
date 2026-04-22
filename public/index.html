@@ -614,7 +614,7 @@
         startBtn.disabled = true;
         stopBtn.disabled = false;
         
-        if (status.uptimeSeconds) {
+        if (status.uptimeSeconds !== undefined) {
           const hours = Math.floor(status.uptimeSeconds / 3600);
           const minutes = Math.floor((status.uptimeSeconds % 3600) / 60);
           const seconds = status.uptimeSeconds % 60;
