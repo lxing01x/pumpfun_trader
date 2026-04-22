@@ -34,7 +34,7 @@ class PumpfunTrader {
     }
 
     console.log('Starting new trading session...');
-    this.tradeManager.startNewSession(config.strategy as Record<string, number>);
+    this.tradeManager.startNewSession(config.strategy);
 
     console.log('Connecting to gRPC server...');
     try {
@@ -173,7 +173,7 @@ class PumpfunTrader {
 
     this.analysisEngine.printFinalReport(finalParams, finalResult);
 
-    this.tradeManager.endSession(finalParams as Record<string, number>);
+    this.tradeManager.endSession(finalParams);
 
     if (this.cronJob) {
       this.cronJob.stop();
@@ -187,9 +187,7 @@ class PumpfunTrader {
 
   private async reconnect(): Promise<void> {
     try {
-      await this.grpcClient.connect();
-      this.grpcClient.subscribeToTransactions();
-      console.log('Reconnected to gRPC server successfully');
+      await this.grpcClient.reconnect();
     } catch (error) {
       console.error('Reconnection failed. Retrying in 5 seconds...');
       setTimeout(() => this.reconnect(), 5000);
@@ -202,7 +200,7 @@ class PumpfunTrader {
       process.exit(1);
     }
 
-    this.grpcClient.subscribeToTransactions();
+    await this.grpcClient.subscribeToTransactions();
   }
 
   public stop(): void {
@@ -212,7 +210,7 @@ class PumpfunTrader {
     this.grpcClient.disconnect();
     
     const currentParams = this.strategy.getParams();
-    this.tradeManager.endSession(currentParams as Record<string, number>);
+    this.tradeManager.endSession(currentParams);
     
     console.log('Pumpfun Trader stopped.');
   }
