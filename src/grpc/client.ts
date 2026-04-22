@@ -14,8 +14,6 @@ export interface PumpfunTransaction {
   slot: number;
   timestamp: number;
   tokenMint: string;
-  tokenSymbol: string;
-  tokenName: string;
   tradeType: 'buy' | 'sell';
   solAmount: number;
   tokenAmount: number;
@@ -148,7 +146,6 @@ export class GRPCClient extends EventEmitter {
       }
 
       const accountKeys = message.accountKeys || [];
-      const instructions = message.instructions || [];
 
       let tokenMint = '';
       let tradeType: 'buy' | 'sell' = 'buy';
@@ -196,23 +193,33 @@ export class GRPCClient extends EventEmitter {
 
       const price = solAmount > 0 && tokenAmount > 0 ? solAmount / tokenAmount : 0;
 
+      if (price <= 0) {
+        return null;
+      }
+
+      if (!tokenMint || tokenMint.startsWith('unknown_')) {
+        return null;
+      }
+
       const slot = tx.slot ? parseInt(tx.slot, 10) : 0;
+
+      const shortMint = tokenMint.length > 8 
+        ? `${tokenMint.substring(0, 4)}...${tokenMint.substring(tokenMint.length - 4)}` 
+        : tokenMint;
+
+      console.log(`[${tradeType.toUpperCase()}] ${shortMint} | SOL: ${solAmount.toFixed(4)} | Price: ${price.toExponential(4)}`);
 
       const transaction: PumpfunTransaction = {
         signature: `0x${signature}`,
         slot,
         timestamp: Date.now(),
-        tokenMint: tokenMint || `unknown_${Date.now()}`,
-        tokenSymbol: this.extractTokenSymbol(instructions) || 'UNKNOWN',
-        tokenName: this.extractTokenName(instructions) || 'Unknown Token',
+        tokenMint,
         tradeType,
         solAmount,
         tokenAmount,
         price,
         trader: trader || 'unknown',
       };
-
-      console.log(`[${tradeType.toUpperCase()}] ${transaction.tokenSymbol} | SOL: ${solAmount.toFixed(4)} | Price: ${price}`);
 
       return transaction;
     } catch (error) {

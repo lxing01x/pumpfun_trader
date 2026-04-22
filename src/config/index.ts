@@ -25,12 +25,12 @@ export interface Config {
 }
 
 const defaultStrategy: TradingStrategyParams = {
-  minVolume: 10000,
-  minPriceChangePercent: 5,
+  minVolume: 5,
+  minPriceChangePercent: 3,
   maxPriceChangePercent: 50,
-  stopLossPercent: 3,
-  takeProfitPercent: 10,
-  maxHoldTimeMinutes: 60,
+  stopLossPercent: 2,
+  takeProfitPercent: 5,
+  maxHoldTimeMinutes: 5,
   positionSize: 1,
 };
 

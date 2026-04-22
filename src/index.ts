@@ -73,7 +73,6 @@ class PumpfunTrader {
     });
 
     this.strategy.on('buySignal', (signal: any) => {
-      console.log(`[BUY SIGNAL] ${signal.tokenSymbol} - ${signal.reason}`);
     });
   }
 
@@ -87,7 +86,6 @@ class PumpfunTrader {
     if (this.strategy.checkBuySignal(tokenData)) {
       const position = this.strategy.openPosition(
         tokenData.mintAddress,
-        tokenData.symbol,
         tokenData.currentPrice,
         config.strategy.positionSize
       );

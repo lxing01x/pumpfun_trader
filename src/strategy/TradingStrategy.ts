@@ -4,7 +4,6 @@ import { EventEmitter } from 'events';
 
 export interface BuySignal {
   tokenMint: string;
-  tokenSymbol: string;
   price: number;
   reason: string;
   timestamp: number;
@@ -13,7 +12,6 @@ export interface BuySignal {
 export interface SellSignal {
   positionId: string;
   tokenMint: string;
-  tokenSymbol: string;
   price: number;
   reason: 'take_profit' | 'stop_loss' | 'time_limit';
   timestamp: number;
@@ -43,22 +41,26 @@ export class TradingStrategy extends EventEmitter {
       return false;
     }
 
-    const volumeCondition = token.volume10m >= this.params.minVolume;
+    const volumeCondition = token.volume30s >= this.params.minVolume;
     const priceChangeCondition = 
-      token.priceChangePercent5m >= this.params.minPriceChangePercent &&
-      token.priceChangePercent5m <= this.params.maxPriceChangePercent;
+      token.priceChangePercent30s >= this.params.minPriceChangePercent &&
+      token.priceChangePercent30s <= this.params.maxPriceChangePercent;
 
     const shouldBuy = volumeCondition && priceChangeCondition;
 
     if (shouldBuy) {
+      const shortMint = token.mintAddress.length > 8 
+        ? `${token.mintAddress.substring(0, 4)}...${token.mintAddress.substring(token.mintAddress.length - 4)}` 
+        : token.mintAddress;
+
       const buySignal: BuySignal = {
         tokenMint: token.mintAddress,
-        tokenSymbol: token.symbol,
         price: token.currentPrice,
-        reason: `Volume: ${token.volume10m.toFixed(2)} SOL, Price change: ${token.priceChangePercent5m.toFixed(2)}%`,
+        reason: `Volume: ${token.volume30s.toFixed(2)} SOL, Price change (30s): ${token.priceChangePercent30s.toFixed(2)}%`,
         timestamp: Date.now(),
       };
       this.emit('buySignal', buySignal);
+      console.log(`[BUY SIGNAL] ${shortMint} - ${buySignal.reason}`);
     }
 
     return shouldBuy;
@@ -74,11 +76,14 @@ export class TradingStrategy extends EventEmitter {
 
       position.currentPrice = token.currentPrice;
 
+      const shortMint = position.tokenMint.length > 8 
+        ? `${position.tokenMint.substring(0, 4)}...${position.tokenMint.substring(position.tokenMint.length - 4)}` 
+        : position.tokenMint;
+
       if (position.currentPrice >= position.takeProfitPrice) {
         sellSignals.push({
           positionId,
           tokenMint: position.tokenMint,
-          tokenSymbol: position.tokenSymbol,
           price: position.currentPrice,
           reason: 'take_profit',
           timestamp: now,
@@ -90,7 +95,6 @@ export class TradingStrategy extends EventEmitter {
         sellSignals.push({
           positionId,
           tokenMint: position.tokenMint,
-          tokenSymbol: position.tokenSymbol,
           price: position.currentPrice,
           reason: 'stop_loss',
           timestamp: now,
@@ -104,7 +108,6 @@ export class TradingStrategy extends EventEmitter {
         sellSignals.push({
           positionId,
           tokenMint: position.tokenMint,
-          tokenSymbol: position.tokenSymbol,
           price: position.currentPrice,
           reason: 'time_limit',
           timestamp: now,
@@ -117,7 +120,6 @@ export class TradingStrategy extends EventEmitter {
 
   public openPosition(
     tokenMint: string,
-    tokenSymbol: string,
     entryPrice: number,
     amount: number
   ): Position {
@@ -126,7 +128,7 @@ export class TradingStrategy extends EventEmitter {
     const position: Position = {
       id: positionId,
       tokenMint,
-      tokenSymbol,
+      tokenSymbol: '',
       entryPrice,
       amount,
       entryTimestamp: Date.now(),
@@ -136,7 +138,12 @@ export class TradingStrategy extends EventEmitter {
     };
 
     this.positions.set(positionId, position);
-    console.log(`Opened position: ${positionId} - ${tokenSymbol} at ${entryPrice}`);
+    
+    const shortMint = tokenMint.length > 8 
+      ? `${tokenMint.substring(0, 4)}...${tokenMint.substring(tokenMint.length - 4)}` 
+      : tokenMint;
+    
+    console.log(`Opened position: ${positionId} - ${shortMint} at ${entryPrice.toExponential(4)}`);
 
     return position;
   }
@@ -159,7 +166,7 @@ export class TradingStrategy extends EventEmitter {
     const closedPosition: ClosedPosition = {
       id: positionId,
       tokenMint: position.tokenMint,
-      tokenSymbol: position.tokenSymbol,
+      tokenSymbol: '',
       entryPrice: position.entryPrice,
       exitPrice,
       amount: position.amount,
@@ -174,9 +181,13 @@ export class TradingStrategy extends EventEmitter {
     this.closedPositions.push(closedPosition);
     this.positions.delete(positionId);
 
+    const shortMint = position.tokenMint.length > 8 
+      ? `${position.tokenMint.substring(0, 4)}...${position.tokenMint.substring(position.tokenMint.length - 4)}` 
+      : position.tokenMint;
+
     console.log(
-      `Closed position: ${positionId} - ${position.tokenSymbol} ` +
-      `at ${exitPrice}, P/L: ${profitLossPercent.toFixed(2)}%, Reason: ${reason}`
+      `Closed position: ${positionId} - ${shortMint} ` +
+      `at ${exitPrice.toExponential(4)}, P/L: ${profitLossPercent.toFixed(2)}%, Reason: ${reason}`
     );
 
     return closedPosition;
