@@ -65,6 +65,8 @@ export interface Position {
   currentPrice: number;
   stopLossPrice: number;
   takeProfitPrice: number;
+  buyFeeAmount: number;
+  buyFeePercent: number;
 }
 
 export interface ClosedPosition {
@@ -79,6 +81,13 @@ export interface ClosedPosition {
   holdTimeMinutes: number;
   profitLoss: number;
   profitLossPercent: number;
+  profitLossAfterFees: number;
+  profitLossPercentAfterFees: number;
+  buyFeeAmount: number;
+  buyFeePercent: number;
+  sellFeeAmount: number;
+  sellFeePercent: number;
+  totalFees: number;
   exitReason: 'take_profit' | 'stop_loss' | 'time_limit' | 'manual' | 'sharp_drop' | 'crash' | 'sell_pressure' | 'partial_take_profit' | 'trailing_stop';
 }
 
@@ -91,8 +100,15 @@ export interface AnalysisResult {
   winRate: number;
   totalProfitLoss: number;
   totalProfitLossPercent: number;
+  totalProfitLossAfterFees: number;
+  totalProfitLossPercentAfterFees: number;
+  totalFees: number;
+  profitFactor: number;
+  averageProfit: number;
+  averageLoss: number;
   averageHoldTimeMinutes: number;
   isProfitable: boolean;
+  isProfitableAfterFees: boolean;
 }
 
 export interface StrategyAdjustment {

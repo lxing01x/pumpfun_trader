@@ -15,8 +15,31 @@ export interface TradeRecord {
   holdTimeMinutes?: number;
   profitLoss?: number;
   profitLossPercent?: number;
+  profitLossAfterFees?: number;
+  profitLossPercentAfterFees?: number;
+  buyFeeAmount?: number;
+  buyFeePercent?: number;
+  sellFeeAmount?: number;
+  sellFeePercent?: number;
+  totalFees?: number;
   exitReason?: string;
   status: 'open' | 'closed';
+}
+
+export interface SessionStatistics {
+  totalTrades: number;
+  winningTrades: number;
+  losingTrades: number;
+  winRate: number;
+  totalProfitLoss: number;
+  totalProfitLossPercent: number;
+  totalProfitLossAfterFees: number;
+  totalProfitLossPercentAfterFees: number;
+  totalFees: number;
+  profitFactor: number;
+  averageProfit: number;
+  averageLoss: number;
+  averageHoldTimeMinutes: number;
 }
 
 export interface TradingSession {
@@ -27,6 +50,7 @@ export interface TradingSession {
   finalParams?: TradingStrategyParams;
   isProfitable: boolean;
   totalProfitLoss: number;
+  statistics?: SessionStatistics;
   trades: TradeRecord[];
 }
 
@@ -74,15 +98,14 @@ export class TradeRecordManager {
       entryPrice: position.entryPrice,
       amount: position.amount,
       entryTimestamp: position.entryTimestamp,
+      buyFeeAmount: position.buyFeeAmount,
+      buyFeePercent: position.buyFeePercent,
       status: 'open',
     };
 
     this.currentSession.trades.push(tradeRecord);
     
-    const shortMint = position.tokenMint.length > 8 
-      ? `${position.tokenMint.substring(0, 4)}...${position.tokenMint.substring(position.tokenMint.length - 4)}` 
-      : position.tokenMint;
-    console.log(`Recorded BUY: ${shortMint} at ${position.entryPrice.toExponential(4)}`);
+    console.log(`Recorded BUY: ${position.tokenMint} at ${position.entryPrice.toExponential(4)}`);
     
     this.saveCurrentSession();
   }
@@ -101,6 +124,13 @@ export class TradeRecordManager {
       existingTrade.holdTimeMinutes = closedPosition.holdTimeMinutes;
       existingTrade.profitLoss = closedPosition.profitLoss;
       existingTrade.profitLossPercent = closedPosition.profitLossPercent;
+      existingTrade.profitLossAfterFees = closedPosition.profitLossAfterFees;
+      existingTrade.profitLossPercentAfterFees = closedPosition.profitLossPercentAfterFees;
+      existingTrade.buyFeeAmount = closedPosition.buyFeeAmount;
+      existingTrade.buyFeePercent = closedPosition.buyFeePercent;
+      existingTrade.sellFeeAmount = closedPosition.sellFeeAmount;
+      existingTrade.sellFeePercent = closedPosition.sellFeePercent;
+      existingTrade.totalFees = closedPosition.totalFees;
       existingTrade.exitReason = closedPosition.exitReason;
       existingTrade.status = 'closed';
     } else {
@@ -116,6 +146,13 @@ export class TradeRecordManager {
         holdTimeMinutes: closedPosition.holdTimeMinutes,
         profitLoss: closedPosition.profitLoss,
         profitLossPercent: closedPosition.profitLossPercent,
+        profitLossAfterFees: closedPosition.profitLossAfterFees,
+        profitLossPercentAfterFees: closedPosition.profitLossPercentAfterFees,
+        buyFeeAmount: closedPosition.buyFeeAmount,
+        buyFeePercent: closedPosition.buyFeePercent,
+        sellFeeAmount: closedPosition.sellFeeAmount,
+        sellFeePercent: closedPosition.sellFeePercent,
+        totalFees: closedPosition.totalFees,
         exitReason: closedPosition.exitReason,
         status: 'closed',
       });
@@ -123,12 +160,9 @@ export class TradeRecordManager {
 
     this.updateSessionMetrics();
     
-    const shortMint = closedPosition.tokenMint.length > 8 
-      ? `${closedPosition.tokenMint.substring(0, 4)}...${closedPosition.tokenMint.substring(closedPosition.tokenMint.length - 4)}` 
-      : closedPosition.tokenMint;
     console.log(
-      `Recorded SELL: ${shortMint} at ${closedPosition.exitPrice.toExponential(4)}, ` +
-      `P/L: ${closedPosition.profitLossPercent.toFixed(2)}%, Reason: ${closedPosition.exitReason}`
+      `Recorded SELL: ${closedPosition.tokenMint} at ${closedPosition.exitPrice.toExponential(4)}, ` +
+      `P/L After Fees: ${closedPosition.profitLossPercentAfterFees >= 0 ? '+' : ''}${closedPosition.profitLossPercentAfterFees.toFixed(2)}%, Reason: ${closedPosition.exitReason}`
     );
     
     this.saveCurrentSession();
@@ -154,10 +188,94 @@ export class TradeRecordManager {
     if (!this.currentSession) return;
 
     const closedTrades = this.currentSession.trades.filter(t => t.status === 'closed');
+    const totalTrades = closedTrades.length;
+
+    if (totalTrades === 0) {
+      this.currentSession.totalProfitLoss = 0;
+      this.currentSession.isProfitable = false;
+      this.currentSession.statistics = {
+        totalTrades: 0,
+        winningTrades: 0,
+        losingTrades: 0,
+        winRate: 0,
+        totalProfitLoss: 0,
+        totalProfitLossPercent: 0,
+        totalProfitLossAfterFees: 0,
+        totalProfitLossPercentAfterFees: 0,
+        totalFees: 0,
+        profitFactor: 0,
+        averageProfit: 0,
+        averageLoss: 0,
+        averageHoldTimeMinutes: 0,
+      };
+      return;
+    }
+
+    const winningTrades = closedTrades.filter(t => (t.profitLossAfterFees || t.profitLoss || 0) > 0);
+    const losingTrades = closedTrades.filter(t => (t.profitLossAfterFees || t.profitLoss || 0) <= 0);
+
     const totalProfitLoss = closedTrades.reduce((sum, t) => sum + (t.profitLoss || 0), 0);
+    const totalProfitLossPercent = closedTrades.length > 0 
+      ? closedTrades.reduce((sum, t) => sum + (t.profitLossPercent || 0), 0) / closedTrades.length 
+      : 0;
+
+    const totalProfitLossAfterFees = closedTrades.reduce((sum, t) => sum + (t.profitLossAfterFees || t.profitLoss || 0), 0);
+    const totalProfitLossPercentAfterFees = closedTrades.length > 0 
+      ? closedTrades.reduce((sum, t) => sum + (t.profitLossPercentAfterFees || t.profitLossPercent || 0), 0) / closedTrades.length 
+      : 0;
+
+    const totalFees = closedTrades.reduce((sum, t) => sum + (t.totalFees || 0), 0);
+
+    const totalGrossProfit = winningTrades.reduce((sum, t) => sum + Math.max(t.profitLossAfterFees || t.profitLoss || 0, 0), 0);
+    const totalGrossLoss = Math.abs(losingTrades.reduce((sum, t) => sum + Math.min(t.profitLossAfterFees || t.profitLoss || 0, 0), 0));
     
-    this.currentSession.totalProfitLoss = totalProfitLoss;
-    this.currentSession.isProfitable = totalProfitLoss > 0;
+    const profitFactor = totalGrossLoss > 0 ? totalGrossProfit / totalGrossLoss : totalGrossProfit > 0 ? Infinity : 0;
+
+    const averageProfit = winningTrades.length > 0 
+      ? winningTrades.reduce((sum, t) => sum + (t.profitLossAfterFees || t.profitLoss || 0), 0) / winningTrades.length 
+      : 0;
+    const averageLoss = losingTrades.length > 0 
+      ? losingTrades.reduce((sum, t) => sum + (t.profitLossAfterFees || t.profitLoss || 0), 0) / losingTrades.length 
+      : 0;
+
+    const averageHoldTimeMinutes = closedTrades.length > 0 
+      ? closedTrades.reduce((sum, t) => sum + (t.holdTimeMinutes || 0), 0) / closedTrades.length 
+      : 0;
+
+    const winRate = totalTrades > 0 ? (winningTrades.length / totalTrades) * 100 : 0;
+
+    this.currentSession.totalProfitLoss = totalProfitLossAfterFees;
+    this.currentSession.isProfitable = totalProfitLossAfterFees > 0;
+    
+    this.currentSession.statistics = {
+      totalTrades,
+      winningTrades: winningTrades.length,
+      losingTrades: losingTrades.length,
+      winRate,
+      totalProfitLoss,
+      totalProfitLossPercent,
+      totalProfitLossAfterFees,
+      totalProfitLossPercentAfterFees,
+      totalFees,
+      profitFactor,
+      averageProfit,
+      averageLoss,
+      averageHoldTimeMinutes,
+    };
+
+    console.log('\n' + '='.repeat(60));
+    console.log('SESSION STATISTICS UPDATED');
+    console.log('='.repeat(60));
+    console.log(`Total Trades: ${totalTrades}`);
+    console.log(`Winning: ${winningTrades.length}, Losing: ${losingTrades.length}`);
+    console.log(`Win Rate: ${winRate.toFixed(2)}%`);
+    console.log(`Profit Factor: ${profitFactor.toFixed(2)}`);
+    console.log(`Total P/L Before Fees: ${totalProfitLoss >= 0 ? '+' : ''}${totalProfitLoss.toFixed(6)} SOL (${totalProfitLossPercent.toFixed(2)}%)`);
+    console.log(`Total P/L After Fees: ${totalProfitLossAfterFees >= 0 ? '+' : ''}${totalProfitLossAfterFees.toFixed(6)} SOL (${totalProfitLossPercentAfterFees.toFixed(2)}%)`);
+    console.log(`Total Fees Paid: ${totalFees.toFixed(6)} SOL`);
+    console.log(`Avg Profit: ${averageProfit.toFixed(6)} SOL | Avg Loss: ${averageLoss.toFixed(6)} SOL`);
+    console.log(`Avg Hold Time: ${averageHoldTimeMinutes.toFixed(2)} min`);
+    console.log('='.repeat(60) + '\n');
   }
 
   public endSession(finalParams?: TradingStrategyParams): TradingSession | null {

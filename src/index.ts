@@ -1,9 +1,10 @@
-import { config, validateConfig, TradingStrategyParams } from './config';
+import { configManager, validateConfig, TradingStrategyParams, RuntimeConfig } from './config';
 import { GRPCClient, PumpfunTransaction } from './grpc/client';
 import { TokenManager } from './token/TokenManager';
 import { TradingStrategy } from './strategy/TradingStrategy';
 import { TradeRecordManager } from './trade/TradeRecordManager';
 import { AnalysisEngine } from './analysis/AnalysisEngine';
+import { ApiServer } from './api/ApiServer';
 import * as cron from 'node-cron';
 
 class PumpfunTrader {
@@ -12,17 +13,61 @@ class PumpfunTrader {
   private strategy: TradingStrategy;
   private tradeManager: TradeRecordManager;
   private analysisEngine: AnalysisEngine;
+  private apiServer: ApiServer;
   private lastAnalysisTime: number;
   private isOptimizationComplete: boolean = false;
   private cronJob: cron.ScheduledTask | null = null;
+  private isTradingActive: boolean = false;
+  private isInitialized: boolean = false;
+  private sessionStartTime: number = Date.now();
+  private detectionTimer: NodeJS.Timeout | null = null;
 
   constructor() {
+    const config = configManager.config;
     this.grpcClient = new GRPCClient(config.grpc);
     this.tokenManager = new TokenManager();
-    this.strategy = new TradingStrategy(config.strategy);
+    this.strategy = new TradingStrategy(config.strategy, config.fees);
     this.tradeManager = new TradeRecordManager();
     this.analysisEngine = new AnalysisEngine(config.strategy);
+    this.apiServer = new ApiServer(config.api);
     this.lastAnalysisTime = Date.now();
+
+    this.setupConfigListeners();
+    this.setupApiListeners();
+  }
+
+  private setupConfigListeners(): void {
+    configManager.onConfigChanged((data: { type: string; params: any }) => {
+      console.log(`Config changed (${data.type}):`, data.params);
+      
+      if (data.type === 'strategy') {
+        this.strategy.updateParams(data.params);
+      } else if (data.type === 'fees') {
+        this.strategy.updateFees(data.params);
+      } else if (data.type === 'runtime') {
+        if (data.params.analysisIntervalMinutes !== undefined) {
+          this.rescheduleAnalysis();
+        }
+      }
+    });
+  }
+
+  private setupApiListeners(): void {
+    this.apiServer.on('startTrading', () => {
+      console.log('Received start trading request from API');
+      this.startTrading();
+    });
+
+    this.apiServer.on('stopTrading', () => {
+      console.log('Received stop trading request from API');
+      this.stopTrading();
+    });
+
+    this.apiServer.on('runtimeConfigChanged', (params: Partial<RuntimeConfig>) => {
+      if (params.analysisIntervalMinutes !== undefined) {
+        this.rescheduleAnalysis();
+      }
+    });
   }
 
   public async initialize(): Promise<boolean> {
@@ -31,6 +76,18 @@ class PumpfunTrader {
     if (!validateConfig()) {
       console.error('Configuration validation failed. Please check your .env file.');
       return false;
+    }
+
+    const config = configManager.config;
+
+    if (config.api.enabled) {
+      await this.apiServer.setTradingComponents(
+        this.tradeManager,
+        this.strategy,
+        this.analysisEngine,
+        this.tokenManager
+      );
+      await this.apiServer.start();
     }
 
     console.log('Starting new trading session...');
@@ -46,6 +103,15 @@ class PumpfunTrader {
 
     this.setupEventListeners();
     this.schedulePeriodicAnalysis();
+    this.scheduleDetectionTimeout();
+
+    this.isInitialized = true;
+    this.isTradingActive = true;
+    this.sessionStartTime = Date.now();
+    this.apiServer.setTradingStatus({
+      isRunning: true,
+      startTime: this.sessionStartTime,
+    });
 
     console.log('\n' + '='.repeat(60));
     console.log('PUMPFUN SIMULATED TRADER STARTED');
@@ -77,7 +143,7 @@ class PumpfunTrader {
   }
 
   private handleTransaction(transaction: PumpfunTransaction): void {
-    if (this.isOptimizationComplete) {
+    if (!this.isTradingActive || this.isOptimizationComplete) {
       return;
     }
 
@@ -87,11 +153,13 @@ class PumpfunTrader {
       return;
     }
 
+    const strategyParams = configManager.strategy;
+
     if (this.strategy.checkBuySignal(tokenData)) {
       const position = this.strategy.openPosition(
         tokenData.mintAddress,
         tokenData.currentPrice,
-        config.strategy.positionSize
+        strategyParams.positionSize
       );
       this.tradeManager.recordBuy(position);
     }
@@ -117,17 +185,42 @@ class PumpfunTrader {
   }
 
   private schedulePeriodicAnalysis(): void {
-    const cronExpression = `*/${config.analysisIntervalMinutes} * * * *`;
-    
+    if (this.cronJob) {
+      this.cronJob.stop();
+    }
+
+    const config = configManager.config;
+    const cronExpression = `*/${config.runtime.analysisIntervalMinutes} * * * *`;
+
     this.cronJob = cron.schedule(cronExpression, () => {
       this.performPeriodicAnalysis();
     });
 
-    console.log(`Scheduled periodic analysis every ${config.analysisIntervalMinutes} minutes`);
+    console.log(`Scheduled periodic analysis every ${config.runtime.analysisIntervalMinutes} minutes`);
+  }
+
+  private rescheduleAnalysis(): void {
+    this.schedulePeriodicAnalysis();
+  }
+
+  private scheduleDetectionTimeout(): void {
+    if (this.detectionTimer) {
+      clearTimeout(this.detectionTimer);
+    }
+
+    const config = configManager.config;
+    if (config.runtime.maxDetectionTimeMinutes > 0) {
+      this.detectionTimer = setTimeout(() => {
+        console.log(`\n[${new Date().toLocaleTimeString()}] Max detection time reached (${config.runtime.maxDetectionTimeMinutes} minutes) elapsed. Stopping trading...`);
+        this.stopTrading();
+      }, config.runtime.maxDetectionTimeMinutes * 60 * 1000);
+
+      console.log(`Max detection time set to ${config.runtime.maxDetectionTimeMinutes} minutes`);
+    }
   }
 
   private performPeriodicAnalysis(): void {
-    if (this.isOptimizationComplete) {
+    if (this.isOptimizationComplete || !this.isTradingActive) {
       return;
     }
 
@@ -138,14 +231,14 @@ class PumpfunTrader {
     console.log(`\n[${new Date().toLocaleTimeString()}] Starting periodic analysis...`);
 
     const closedPositions = this.strategy.getClosedPositions(analysisStart, now);
-    
+
     const result = this.analysisEngine.analyzePositions(
       closedPositions,
       analysisStart,
       now
     );
 
-    if (result.isProfitable && result.totalTrades > 0) {
+    if (result.isProfitableAfterFees && result.totalTrades > 0) {
       this.completeOptimization(result);
       return;
     }
@@ -158,6 +251,7 @@ class PumpfunTrader {
         console.log('\nAdjusting strategy parameters...');
         const newParams = this.analysisEngine.applyAdjustments(currentParams, adjustments);
         this.strategy.updateParams(newParams);
+        configManager.updateStrategy(newParams);
       } else {
         console.log('No adjustments suggested for this period.');
       }
@@ -168,9 +262,9 @@ class PumpfunTrader {
 
   private completeOptimization(finalResult: any): void {
     this.isOptimizationComplete = true;
-    
+
     const finalParams = this.strategy.getParams();
-    
+
     console.log('\n' + '!'.repeat(70));
     console.log('OPTIMIZATION COMPLETE - PROFITABLE PARAMETERS FOUND!');
     console.log('!'.repeat(70));
@@ -183,7 +277,16 @@ class PumpfunTrader {
       this.cronJob.stop();
     }
 
+    if (this.detectionTimer) {
+      clearTimeout(this.detectionTimer);
+    }
+
     this.grpcClient.disconnect();
+
+    this.isTradingActive = false;
+    this.apiServer.setTradingStatus({
+      isRunning: false,
+    });
 
     console.log('\nSystem will now exit. You can use the optimized parameters for live trading.');
     process.exit(0);
@@ -198,7 +301,76 @@ class PumpfunTrader {
     }
   }
 
+  public async startTrading(): Promise<void> {
+    if (this.isTradingActive) {
+      console.log('Trading is already active');
+      return;
+    }
+
+    if (!this.isInitialized) {
+      await this.initialize();
+    } else {
+      this.isTradingActive = true;
+      this.sessionStartTime = Date.now();
+      this.apiServer.setTradingStatus({
+        isRunning: true,
+        startTime: this.sessionStartTime,
+      });
+
+      this.schedulePeriodicAnalysis();
+      this.scheduleDetectionTimeout();
+
+      await this.grpcClient.subscribeToTransactions();
+    }
+  }
+
+  public stopTrading(): void {
+    if (!this.isTradingActive) {
+      console.log('Trading is not active');
+      return;
+    }
+
+    this.isTradingActive = false;
+
+    if (this.cronJob) {
+      this.cronJob.stop();
+    }
+
+    if (this.detectionTimer) {
+      clearTimeout(this.detectionTimer);
+    }
+
+    this.grpcClient.disconnect();
+
+    const currentParams = this.strategy.getParams();
+    this.tradeManager.endSession(currentParams);
+
+    this.apiServer.setTradingStatus({
+      isRunning: false,
+    });
+
+    console.log('Pumpfun Trader stopped.');
+  }
+
   public async start(): Promise<void> {
+    const config = configManager.config;
+
+    if (config.api.enabled) {
+      this.apiServer.setTradingComponents(
+        this.tradeManager,
+        this.strategy,
+        this.analysisEngine,
+        this.tokenManager
+      );
+      await this.apiServer.start();
+
+      console.log('\n' + '='.repeat(60));
+      console.log('WEB INTERFACE READY');
+      console.log('='.repeat(60));
+      console.log(`Open your browser and go to: http://${config.api.host}:${config.api.port}`);
+      console.log('='.repeat(60) + '\n');
+    }
+
     const initialized = await this.initialize();
     if (!initialized) {
       process.exit(1);
@@ -208,14 +380,23 @@ class PumpfunTrader {
   }
 
   public stop(): void {
+    this.isTradingActive = false;
+
     if (this.cronJob) {
       this.cronJob.stop();
     }
+
+    if (this.detectionTimer) {
+      clearTimeout(this.detectionTimer);
+    }
+
     this.grpcClient.disconnect();
-    
+
     const currentParams = this.strategy.getParams();
     this.tradeManager.endSession(currentParams);
-    
+
+    this.apiServer.stop();
+
     console.log('Pumpfun Trader stopped.');
   }
 }

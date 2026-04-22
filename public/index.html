@@ -1,0 +1,987 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pumpfun 模拟交易分析系统</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background-color: #f5f7fa;
+      color: #333;
+      line-height: 1.6;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 20px 0;
+      margin-bottom: 30px;
+      border-radius: 10px;
+      box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+    }
+
+    header h1 {
+      text-align: center;
+      font-size: 28px;
+      font-weight: 600;
+    }
+
+    .status-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: white;
+      padding: 15px 25px;
+      border-radius: 10px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+    }
+
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .status-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background-color: #e74c3c;
+    }
+
+    .status-dot.running {
+      background-color: #27ae60;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .control-buttons {
+      display: flex;
+      gap: 10px;
+    }
+
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      transition: all 0.3s ease;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 15px rgba(39, 174, 96, 0.3);
+    }
+
+    .btn-danger {
+      background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+      color: white;
+    }
+
+    .btn-danger:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 15px rgba(231, 76, 60, 0.3);
+    }
+
+    .btn-secondary {
+      background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+      color: white;
+    }
+
+    .btn-secondary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 15px rgba(52, 152, 219, 0.3);
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 5px;
+      margin-bottom: 20px;
+      background: white;
+      padding: 5px;
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+    }
+
+    .tab {
+      padding: 12px 24px;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      color: #666;
+      border-radius: 6px;
+      transition: all 0.3s ease;
+    }
+
+    .tab.active {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+
+    .tab:hover:not(.active) {
+      background: #f5f7fa;
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    .card {
+      background: white;
+      border-radius: 10px;
+      padding: 25px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+    }
+
+    .card h3 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 20px;
+      color: #333;
+      border-bottom: 2px solid #f0f0f0;
+      padding-bottom: 10px;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 20px;
+    }
+
+    .stat-item {
+      text-align: center;
+      padding: 20px;
+      background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+      border-radius: 10px;
+      border-left: 4px solid #667eea;
+    }
+
+    .stat-item.positive {
+      border-left-color: #27ae60;
+    }
+
+    .stat-item.negative {
+      border-left-color: #e74c3c;
+    }
+
+    .stat-item.neutral {
+      border-left-color: #f39c12;
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: #666;
+      margin-bottom: 8px;
+    }
+
+    .stat-value {
+      font-size: 24px;
+      font-weight: 700;
+      color: #333;
+    }
+
+    .stat-value.positive {
+      color: #27ae60;
+    }
+
+    .stat-value.negative {
+      color: #e74c3c;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .form-group label {
+      font-size: 13px;
+      font-weight: 500;
+      color: #666;
+      margin-bottom: 6px;
+    }
+
+    .form-group input {
+      padding: 10px 14px;
+      border: 2px solid #e0e0e0;
+      border-radius: 6px;
+      font-size: 14px;
+      transition: border-color 0.3s ease;
+    }
+
+    .form-group input:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+
+    .form-group input[type="checkbox"] {
+      width: auto;
+      margin-top: 8px;
+    }
+
+    .config-section {
+      margin-bottom: 30px;
+    }
+
+    .config-section h4 {
+      font-size: 16px;
+      font-weight: 600;
+      color: #667eea;
+      margin-bottom: 15px;
+    }
+
+    .table-container {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th, td {
+      padding: 12px 15px;
+      text-align: left;
+      border-bottom: 1px solid #e0e0e0;
+    }
+
+    th {
+      background: #f8f9fa;
+      font-weight: 600;
+      color: #666;
+      font-size: 13px;
+      text-transform: uppercase;
+    }
+
+    tr:hover {
+      background: #f8f9fa;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .badge-success {
+      background: #d4edda;
+      color: #155724;
+    }
+
+    .badge-danger {
+      background: #f8d7da;
+      color: #721c24;
+    }
+
+    .badge-info {
+      background: #d1ecf1;
+      color: #0c5460;
+    }
+
+    .badge-warning {
+      background: #fff3cd;
+      color: #856404;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: #666;
+    }
+
+    .no-data {
+      text-align: center;
+      padding: 40px;
+      color: #999;
+      font-size: 14px;
+    }
+
+    .mint-address {
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      color: #667eea;
+    }
+
+    .refresh-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      background: white;
+      border: 2px solid #e0e0e0;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      transition: all 0.3s ease;
+    }
+
+    .refresh-btn:hover {
+      border-color: #667eea;
+      background: #f8f9ff;
+    }
+
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 15px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Pumpfun 模拟交易分析系统</h1>
+    </header>
+
+    <div class="status-bar">
+      <div class="status-indicator">
+        <div class="status-dot" id="statusDot"></div>
+        <span id="statusText">未运行</span>
+        <span id="uptime" style="margin-left: 20px; color: #666; font-size: 13px;"></span>
+      </div>
+      <div class="control-buttons">
+        <button class="btn btn-primary" id="startBtn" onclick="startTrading()">启动交易</button>
+        <button class="btn btn-danger" id="stopBtn" onclick="stopTrading()" disabled>停止交易</button>
+        <button class="btn btn-secondary" onclick="refreshAll()">刷新数据</button>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab active" data-tab="dashboard">仪表盘</button>
+      <button class="tab" data-tab="config">配置管理</button>
+      <button class="tab" data-tab="positions">持仓管理</button>
+      <button class="tab" data-tab="history">交易历史</button>
+      <button class="tab" data-tab="tokens">活跃代币</button>
+    </div>
+
+    <div id="dashboard" class="tab-content active">
+      <div class="card">
+        <h3>实时统计</h3>
+        <div class="stats-grid" id="statsGrid">
+          <div class="stat-item neutral">
+            <div class="stat-label">总交易次数</div>
+            <div class="stat-value" id="statTotalTrades">0</div>
+          </div>
+          <div class="stat-item positive">
+            <div class="stat-label">盈利交易</div>
+            <div class="stat-value" id="statWinningTrades">0</div>
+          </div>
+          <div class="stat-item negative">
+            <div class="stat-label">亏损交易</div>
+            <div class="stat-value" id="statLosingTrades">0</div>
+          </div>
+          <div class="stat-item neutral">
+            <div class="stat-label">胜率</div>
+            <div class="stat-value" id="statWinRate">0%</div>
+          </div>
+          <div class="stat-item neutral">
+            <div class="stat-label">盈亏比例</div>
+            <div class="stat-value" id="statProfitFactor">0.00</div>
+          </div>
+          <div class="stat-item" id="statTotalProfitItem">
+            <div class="stat-label">总收益 (扣除手续费后)</div>
+            <div class="stat-value" id="statTotalProfit">0.000000 SOL</div>
+          </div>
+          <div class="stat-item neutral">
+            <div class="stat-label">总收益 (扣除手续费前)</div>
+            <div class="stat-value" id="statTotalProfitBeforeFees">0.000000 SOL</div>
+          </div>
+          <div class="stat-item neutral">
+            <div class="stat-label">总手续费</div>
+            <div class="stat-value" id="statTotalFees">0.000000 SOL</div>
+          </div>
+          <div class="stat-item neutral">
+            <div class="stat-label">平均持仓时间</div>
+            <div class="stat-value" id="statAvgHoldTime">0.00 min</div>
+          </div>
+          <div class="stat-item positive">
+            <div class="stat-label">平均盈利</div>
+            <div class="stat-value" id="statAvgProfit">0.000000 SOL</div>
+          </div>
+          <div class="stat-item negative">
+            <div class="stat-label">平均亏损</div>
+            <div class="stat-value" id="statAvgLoss">0.000000 SOL</div>
+          </div>
+          <div class="stat-item neutral">
+            <div class="stat-label">当前持仓数</div>
+            <div class="stat-value" id="statOpenPositions">0</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="config" class="tab-content">
+      <div class="card">
+        <h3>策略参数配置</h3>
+        <div class="config-section">
+          <h4>基础参数</h4>
+          <div class="form-grid" id="strategyConfig">
+          </div>
+        </div>
+        <button class="btn btn-secondary" onclick="saveStrategyConfig()">保存策略配置</button>
+      </div>
+
+      <div class="card">
+        <h3>手续费配置</h3>
+        <div class="form-grid" id="feesConfig">
+        </div>
+        <button class="btn btn-secondary" onclick="saveFeesConfig()">保存手续费配置</button>
+      </div>
+
+      <div class="card">
+        <h3>运行时配置</h3>
+        <div class="form-grid" id="runtimeConfig">
+        </div>
+        <button class="btn btn-secondary" onclick="saveRuntimeConfig()">保存运行时配置</button>
+      </div>
+    </div>
+
+    <div id="positions" class="tab-content">
+      <div class="card">
+        <div class="section-header">
+          <h3>当前持仓</h3>
+          <button class="refresh-btn" onclick="loadOpenPositions()">
+            <span>🔄</span> 刷新
+          </button>
+        </div>
+        <div class="table-container">
+          <table id="openPositionsTable">
+            <thead>
+              <tr>
+                <th>持仓ID</th>
+                <th>Mint 地址</th>
+                <th>入场价格</th>
+                <th>当前价格</th>
+                <th>止损价格</th>
+                <th>止盈价格</th>
+                <th>入场时间</th>
+                <th>买入手续费</th>
+              </tr>
+            </thead>
+            <tbody>
+            </tbody>
+          </table>
+        </div>
+        <div class="no-data" id="noOpenPositions" style="display: none;">暂无持仓</div>
+      </div>
+    </div>
+
+    <div id="history" class="tab-content">
+      <div class="card">
+        <div class="section-header">
+          <h3>已平仓交易 (最近100条)</h3>
+          <button class="refresh-btn" onclick="loadClosedPositions()">
+            <span>🔄</span> 刷新
+          </button>
+        </div>
+        <div class="table-container">
+          <table id="closedPositionsTable">
+            <thead>
+              <tr>
+                <th>交易ID</th>
+                <th>Mint 地址</th>
+                <th>入场价格</th>
+                <th>出场价格</th>
+                <th>持仓时间</th>
+                <th>收益 (扣除手续费前)</th>
+                <th>收益 (扣除手续费后)</th>
+                <th>总手续费</th>
+                <th>出场原因</th>
+                <th>状态</th>
+              </tr>
+            </thead>
+            <tbody>
+            </tbody>
+          </table>
+        </div>
+        <div class="no-data" id="noClosedPositions" style="display: none;">暂无交易记录</div>
+      </div>
+    </div>
+
+    <div id="tokens" class="tab-content">
+      <div class="card">
+        <div class="section-header">
+          <h3>活跃代币 (按30秒交易量排序)</h3>
+          <button class="refresh-btn" onclick="loadActiveTokens()">
+            <span>🔄</span> 刷新
+          </button>
+        </div>
+        <div class="table-container">
+          <table id="tokensTable">
+            <thead>
+              <tr>
+                <th>Mint 地址</th>
+                <th>当前价格</th>
+                <th>30秒交易量 (SOL)</th>
+                <th>买卖比例</th>
+                <th>30秒价格变化</th>
+                <th>30秒波动率</th>
+                <th>是否暴涨</th>
+                <th>是否暴跌</th>
+              </tr>
+            </thead>
+            <tbody>
+            </tbody>
+          </table>
+        </div>
+        <div class="no-data" id="noTokens" style="display: none;">暂无活跃代币</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = '/api';
+
+    async function apiRequest(endpoint, options = {}) {
+      try {
+        const response = await fetch(API_BASE + endpoint, {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          ...options,
+        });
+        const data = await response.json();
+        return data;
+      } catch (error) {
+        console.error('API Request Error:', error);
+        return { success: false, error: error.message };
+      }
+    }
+
+    async function loadStatus() {
+      const result = await apiRequest('/status');
+      if (result.success) {
+        updateStatusUI(result.data);
+      }
+    }
+
+    function updateStatusUI(status) {
+      const statusDot = document.getElementById('statusDot');
+      const statusText = document.getElementById('statusText');
+      const startBtn = document.getElementById('startBtn');
+      const stopBtn = document.getElementById('stopBtn');
+      const uptimeEl = document.getElementById('uptime');
+
+      if (status.isRunning) {
+        statusDot.classList.add('running');
+        statusText.textContent = '运行中';
+        startBtn.disabled = true;
+        stopBtn.disabled = false;
+        
+        if (status.uptimeSeconds) {
+          const hours = Math.floor(status.uptimeSeconds / 3600);
+          const minutes = Math.floor((status.uptimeSeconds % 3600) / 60);
+          const seconds = status.uptimeSeconds % 60;
+          uptimeEl.textContent = `运行时间: ${hours}h ${minutes}m ${seconds}s`;
+        }
+      } else {
+        statusDot.classList.remove('running');
+        statusText.textContent = '未运行';
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
+        uptimeEl.textContent = '';
+      }
+    }
+
+    async function startTrading() {
+      const result = await apiRequest('/trading/start', { method: 'POST' });
+      if (result.success) {
+        alert('交易已启动');
+        loadStatus();
+      } else {
+        alert('启动失败: ' + result.error);
+      }
+    }
+
+    async function stopTrading() {
+      const result = await apiRequest('/trading/stop', { method: 'POST' });
+      if (result.success) {
+        alert('交易已停止');
+        loadStatus();
+      } else {
+        alert('停止失败: ' + result.error);
+      }
+    }
+
+    async function loadStatistics() {
+      const result = await apiRequest('/statistics');
+      if (result.success && result.data) {
+        updateStatisticsUI(result.data);
+      }
+    }
+
+    function updateStatisticsUI(stats) {
+      document.getElementById('statTotalTrades').textContent = stats.totalTrades || 0;
+      document.getElementById('statWinningTrades').textContent = stats.winningTrades || 0;
+      document.getElementById('statLosingTrades').textContent = stats.losingTrades || 0;
+      document.getElementById('statWinRate').textContent = (stats.winRate || 0).toFixed(2) + '%';
+      document.getElementById('statProfitFactor').textContent = stats.profitFactor ? stats.profitFactor.toFixed(2) : '0.00';
+      
+      const profitAfterFees = stats.totalProfitLossAfterFees || 0;
+      const profitItem = document.getElementById('statTotalProfitItem');
+      const profitValue = document.getElementById('statTotalProfit');
+      
+      profitValue.textContent = (profitAfterFees >= 0 ? '+' : '') + profitAfterFees.toFixed(6) + ' SOL';
+      profitValue.className = 'stat-value ' + (profitAfterFees >= 0 ? 'positive' : 'negative');
+      
+      const profitBeforeFees = stats.totalProfitLoss || 0;
+      document.getElementById('statTotalProfitBeforeFees').textContent = (profitBeforeFees >= 0 ? '+' : '') + profitBeforeFees.toFixed(6) + ' SOL';
+      
+      document.getElementById('statTotalFees').textContent = (stats.totalFees || 0).toFixed(6) + ' SOL';
+      document.getElementById('statAvgHoldTime').textContent = (stats.averageHoldTimeMinutes || 0).toFixed(2) + ' min';
+      document.getElementById('statAvgProfit').textContent = (stats.averageProfit || 0).toFixed(6) + ' SOL';
+      document.getElementById('statAvgLoss').textContent = (stats.averageLoss || 0).toFixed(6) + ' SOL';
+    }
+
+    async function loadConfig() {
+      const result = await apiRequest('/config');
+      if (result.success) {
+        renderConfigForms(result.data);
+      }
+    }
+
+    function renderConfigForms(config) {
+      const strategyDiv = document.getElementById('strategyConfig');
+      const feesDiv = document.getElementById('feesConfig');
+      const runtimeDiv = document.getElementById('runtimeConfig');
+
+      const strategyFields = [
+        { key: 'minVolume', label: '最小交易量 (SOL)', type: 'number' },
+        { key: 'minPriceChangePercent', label: '最小价格变化 (%)', type: 'number' },
+        { key: 'maxPriceChangePercent', label: '最大价格变化 (%)', type: 'number' },
+        { key: 'stopLossPercent', label: '止损百分比 (%)', type: 'number' },
+        { key: 'takeProfitPercent', label: '止盈百分比 (%)', type: 'number' },
+        { key: 'maxHoldTimeMinutes', label: '最大持仓时间 (分钟)', type: 'number' },
+        { key: 'positionSize', label: '单笔持仓大小 (SOL)', type: 'number' },
+        { key: 'minTradeCount5s', label: '5秒最小交易次数', type: 'number' },
+        { key: 'minPriceChange5sPercent', label: '5秒最小价格变化 (%)', type: 'number' },
+        { key: 'maxDropFromHighestPercent', label: '最大回撤百分比 (%)', type: 'number' },
+        { key: 'minBuySellRatio', label: '最小买卖比例', type: 'number' },
+        { key: 'minBuySellCountRatio', label: '最小买卖次数比例', type: 'number' },
+        { key: 'minVolumeTrendRatio', label: '最小成交量趋势比例', type: 'number' },
+        { key: 'maxVolatility30s', label: '30秒最大波动率 (%)', type: 'number' },
+        { key: 'minTradeFrequency1m', label: '1分钟最小交易频率', type: 'number' },
+        { key: 'minSolAmountFilter', label: '最小过滤金额 (SOL)', type: 'number' },
+        { key: 'trailingStopPercent', label: '追踪止损百分比 (%)', type: 'number' },
+        { key: 'enableTrailingStop', label: '启用追踪止损', type: 'checkbox' },
+        { key: 'partialTakeProfitPercent', label: '部分止盈百分比 (%)', type: 'number' },
+        { key: 'enablePartialTakeProfit', label: '启用部分止盈', type: 'checkbox' },
+        { key: 'partialSellRatio', label: '部分卖出比例', type: 'number' },
+        { key: 'enableRealTimeSave', label: '启用实时保存', type: 'checkbox' },
+      ];
+
+      const feesFields = [
+        { key: 'enableFees', label: '启用手续费计算', type: 'checkbox' },
+        { key: 'buyFeePercent', label: '买入手续费百分比 (%)', type: 'number' },
+        { key: 'sellFeePercent', label: '卖出手续费百分比 (%)', type: 'number' },
+      ];
+
+      const runtimeFields = [
+        { key: 'maxDetectionTimeMinutes', label: '最大检测时间 (分钟)', type: 'number' },
+        { key: 'analysisIntervalMinutes', label: '分析间隔 (分钟)', type: 'number' },
+      ];
+
+      strategyDiv.innerHTML = strategyFields.map(field => {
+        const value = config.strategy[field.key];
+        return `
+          <div class="form-group">
+            <label for="strategy_${field.key}">${field.label}</label>
+            <input 
+              type="${field.type}" 
+              id="strategy_${field.key}" 
+              name="${field.key}"
+              value="${field.type === 'checkbox' ? '' : value}"
+              ${field.type === 'checkbox' && value ? 'checked' : ''}
+              ${field.type === 'number' ? 'step="any"' : ''}
+            />
+          </div>
+        `;
+      }).join('');
+
+      feesDiv.innerHTML = feesFields.map(field => {
+        const value = config.fees[field.key];
+        return `
+          <div class="form-group">
+            <label for="fees_${field.key}">${field.label}</label>
+            <input 
+              type="${field.type}" 
+              id="fees_${field.key}" 
+              name="${field.key}"
+              value="${field.type === 'checkbox' ? '' : value}"
+              ${field.type === 'checkbox' && value ? 'checked' : ''}
+              ${field.type === 'number' ? 'step="any"' : ''}
+            />
+          </div>
+        `;
+      }).join('');
+
+      runtimeDiv.innerHTML = runtimeFields.map(field => {
+        const value = config.runtime[field.key];
+        return `
+          <div class="form-group">
+            <label for="runtime_${field.key}">${field.label}</label>
+            <input 
+              type="${field.type}" 
+              id="runtime_${field.key}" 
+              name="${field.key}"
+              value="${field.type === 'checkbox' ? '' : value}"
+              ${field.type === 'checkbox' && value ? 'checked' : ''}
+              ${field.type === 'number' ? 'step="any"' : ''}
+            />
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function saveStrategyConfig() {
+      const inputs = document.querySelectorAll('#strategyConfig input');
+      const config = {};
+      
+      inputs.forEach(input => {
+        const key = input.name;
+        if (input.type === 'checkbox') {
+          config[key] = input.checked;
+        } else if (input.type === 'number') {
+          config[key] = parseFloat(input.value);
+        } else {
+          config[key] = input.value;
+        }
+      });
+
+      const result = await apiRequest('/config/strategy', {
+        method: 'PUT',
+        body: JSON.stringify(config),
+      });
+
+      if (result.success) {
+        alert('策略配置已保存');
+      } else {
+        alert('保存失败: ' + result.error);
+      }
+    }
+
+    async function saveFeesConfig() {
+      const inputs = document.querySelectorAll('#feesConfig input');
+      const config = {};
+      
+      inputs.forEach(input => {
+        const key = input.name;
+        if (input.type === 'checkbox') {
+          config[key] = input.checked;
+        } else if (input.type === 'number') {
+          config[key] = parseFloat(input.value);
+        } else {
+          config[key] = input.value;
+        }
+      });
+
+      const result = await apiRequest('/config/fees', {
+        method: 'PUT',
+        body: JSON.stringify(config),
+      });
+
+      if (result.success) {
+        alert('手续费配置已保存');
+      } else {
+        alert('保存失败: ' + result.error);
+      }
+    }
+
+    async function saveRuntimeConfig() {
+      const inputs = document.querySelectorAll('#runtimeConfig input');
+      const config = {};
+      
+      inputs.forEach(input => {
+        const key = input.name;
+        if (input.type === 'checkbox') {
+          config[key] = input.checked;
+        } else if (input.type === 'number') {
+          config[key] = parseFloat(input.value);
+        } else {
+          config[key] = input.value;
+        }
+      });
+
+      const result = await apiRequest('/config/runtime', {
+        method: 'PUT',
+        body: JSON.stringify(config),
+      });
+
+      if (result.success) {
+        alert('运行时配置已保存');
+      } else {
+        alert('保存失败: ' + result.error);
+      }
+    }
+
+    async function loadOpenPositions() {
+      const result = await apiRequest('/trading/positions');
+      const tableBody = document.querySelector('#openPositionsTable tbody');
+      const noData = document.getElementById('noOpenPositions');
+
+      if (result.success && result.data && result.data.length > 0) {
+        noData.style.display = 'none';
+        tableBody.innerHTML = result.data.map(pos => `
+          <tr>
+            <td>${pos.id}</td>
+            <td class="mint-address">${pos.tokenMint}</td>
+            <td>${pos.entryPrice.toExponential(4)}</td>
+            <td>${pos.currentPrice.toExponential(4)}</td>
+            <td>${pos.stopLossPrice.toExponential(4)}</td>
+            <td>${pos.takeProfitPrice.toExponential(4)}</td>
+            <td>${new Date(pos.entryTimestamp).toLocaleString()}</td>
+            <td>${pos.buyFeeAmount ? pos.buyFeeAmount.toFixed(6) + ' SOL' : '0.000000 SOL'}</td>
+          </tr>
+        `).join('');
+      } else {
+        noData.style.display = 'block';
+        tableBody.innerHTML = '';
+      }
+
+      document.getElementById('statOpenPositions').textContent = result.data ? result.data.length : 0;
+    }
+
+    async function loadClosedPositions() {
+      const result = await apiRequest('/trading/closed-positions');
+      const tableBody = document.querySelector('#closedPositionsTable tbody');
+      const noData = document.getElementById('noClosedPositions');
+
+      if (result.success && result.data && result.data.length > 0) {
+        noData.style.display = 'none';
+        tableBody.innerHTML = result.data.map(pos => {
+          const profitAfterFees = pos.profitLossAfterFees || pos.profitLoss;
+          const isProfit = profitAfterFees > 0;
+          
+          return `
+            <tr>
+              <td>${pos.id}</td>
+              <td class="mint-address">${pos.tokenMint}</td>
+              <td>${pos.entryPrice.toExponential(4)}</td>
+              <td>${pos.exitPrice.toExponential(4)}</td>
+              <td>${pos.holdTimeMinutes.toFixed(2)} min</td>
+              <td class="${pos.profitLoss >= 0 ? 'badge-success' : 'badge-danger'}">
+                ${pos.profitLoss >= 0 ? '+' : ''}${pos.profitLossPercent.toFixed(2)}%<br/>
+                ${pos.profitLoss >= 0 ? '+' : ''}${pos.profitLoss.toFixed(6)} SOL
+              </td>
+              <td class="${profitAfterFees >= 0 ? 'badge-success' : 'badge-danger'}">
+                ${profitAfterFees >= 0 ? '+' : ''}${(pos.profitLossPercentAfterFees || 0).toFixed(2)}%<br/>
+                ${profitAfterFees >= 0 ? '+' : ''}${profitAfterFees.toFixed(6)} SOL
+              </td>
+              <td>${(pos.totalFees || 0).toFixed(6)} SOL</td>
+              <td><span class="badge badge-info">${pos.exitReason}</span></td>
+              <td><span class="badge ${isProfit ? 'badge-success' : 'badge-danger'}">${isProfit ? '盈利' : '亏损'}</span></td>
+            </tr>
+          `;
+        }).join('');
+      } else {
+        noData.style.display = 'block';
+        tableBody.innerHTML = '';
+      }
+    }
+
+    async function loadActiveTokens() {
+      const result = await apiRequest('/tokens');
+      const tableBody = document.querySelector('#tokensTable tbody');
+      const noData = document.getElementById('noTokens');
+
+      if (result.success && result.data && result.data.length > 0) {
+        noData.style.display = 'none';
+        tableBody.innerHTML = result.data.map(token => `
+          <tr>
+            <td class="mint-address">${token.mintAddress}</td>
+            <td>${token.currentPrice.toExponential(4)}</td>
+            <td>${token.volume30s.toFixed(4)}</td>
+            <td>${token.buySellRatio.toFixed(2)}</td>
+            <td class="${token.priceChangePercent30s >= 0 ? 'badge-success' : 'badge-danger'}">
+              ${token.priceChangePercent30s >= 0 ? '+' : ''}${token.priceChangePercent30s.toFixed(2)}%
+            </td>
+            <td>${token.volatility30s.toFixed(2)}%</td>
+            <td><span class="badge ${token.isPumping ? 'badge-success' : 'badge-warning'}">${token.isPumping ? '是' : '否'}</span></td>
+            <td><span class="badge ${token.isCrashing ? 'badge-danger' : 'badge-warning'}">${token.isCrashing ? '是' : '否'}</span></td>
+          </tr>
+        `).join('');
+      } else {
+        noData.style.display = 'block';
+        tableBody.innerHTML = '';
+      }
+    }
+
+    function refreshAll() {
+      loadStatus();
+      loadStatistics();
+      loadOpenPositions();
+    }
+
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', function() {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        
+        this.classList.add('active');
+        const tabId = this.getAttribute('data-tab');
+        document.getElementById(tabId).classList.add('active');
+
+        if (tabId === 'positions') loadOpenPositions();
+        if (tabId === 'history') loadClosedPositions();
+        if (tabId === 'tokens') loadActiveTokens();
+        if (tabId === 'config') loadConfig();
+      });
+    });
+
+    loadStatus();
+    loadStatistics();
+    loadConfig();
+
+    setInterval(() => {
+      loadStatus();
+      loadStatistics();
+    }, 5000);
+  </script>
+</body>
+</html>
