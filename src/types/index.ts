@@ -5,12 +5,33 @@ export interface TokenData {
   volume24h: number;
   volume10m: number;
   volume30s: number;
+  buyVolume30s: number;
+  sellVolume30s: number;
+  priceChangePercent5s: number;
   priceChangePercent30s: number;
   priceChangePercent1m: number;
   priceChangePercent5m: number;
   priceChangePercent10m: number;
   lastUpdate: number;
   trades: TokenTrade[];
+  highestPrice: number;
+  highestPriceTimestamp: number;
+  dropFromHighestPercent: number;
+  tradeCount5s: number;
+  tradeCount10s: number;
+  tradeCount30s: number;
+  tradeCount1m: number;
+  buySellRatio: number;
+  buySellCountRatio: number;
+  volumeTrendRatio: number;
+  volatility30s: number;
+  hasSharpDrop: boolean;
+  hasGradualDrop: boolean;
+  hasRecentDrop: boolean;
+  isPumping: boolean;
+  isCrashing: boolean;
+  hasExtremeMove: boolean;
+  tradeFrequency1m: number;
 }
 
 export interface TokenTrade {
@@ -58,7 +79,7 @@ export interface ClosedPosition {
   holdTimeMinutes: number;
   profitLoss: number;
   profitLossPercent: number;
-  exitReason: 'take_profit' | 'stop_loss' | 'time_limit' | 'manual';
+  exitReason: 'take_profit' | 'stop_loss' | 'time_limit' | 'manual' | 'sharp_drop' | 'crash' | 'sell_pressure' | 'partial_take_profit' | 'trailing_stop';
 }
 
 export interface AnalysisResult {

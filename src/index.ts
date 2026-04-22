@@ -83,6 +83,10 @@ class PumpfunTrader {
 
     const tokenData = this.tokenManager.updateTokenData(transaction);
 
+    if (!tokenData) {
+      return;
+    }
+
     if (this.strategy.checkBuySignal(tokenData)) {
       const position = this.strategy.openPosition(
         tokenData.mintAddress,
@@ -102,7 +106,9 @@ class PumpfunTrader {
       const closedPosition = this.strategy.closePosition(
         signal.positionId,
         signal.price,
-        signal.reason
+        signal.reason,
+        signal.isPartial || false,
+        signal.sellRatio || 1
       );
       if (closedPosition) {
         this.tradeManager.recordSell(closedPosition);

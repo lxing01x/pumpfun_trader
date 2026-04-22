@@ -16,6 +16,27 @@ export interface TradingStrategyParams {
   takeProfitPercent: number;
   maxHoldTimeMinutes: number;
   positionSize: number;
+  minTradeCount5s: number;
+  minPriceChange5sPercent: number;
+  maxDropFromHighestPercent: number;
+  minBuySellRatio: number;
+  minBuySellCountRatio: number;
+  minVolumeTrendRatio: number;
+  maxVolatility30s: number;
+  sharpDropThresholdPercent: number;
+  gradualDropThresholdPercent: number;
+  crashThresholdPercent: number;
+  pumpThresholdPercent: number;
+  minTradeFrequency1m: number;
+  minSolAmountFilter: number;
+  enableRealTimeSave: boolean;
+  trailingStopPercent: number;
+  enableTrailingStop: boolean;
+  partialTakeProfitPercent: number;
+  enablePartialTakeProfit: boolean;
+  partialSellRatio: number;
+  crashStopMultiplier: number;
+  pumpSellDelayMs: number;
 }
 
 export interface Config {
@@ -25,13 +46,34 @@ export interface Config {
 }
 
 const defaultStrategy: TradingStrategyParams = {
-  minVolume: 5,
-  minPriceChangePercent: 3,
-  maxPriceChangePercent: 50,
-  stopLossPercent: 2,
-  takeProfitPercent: 5,
-  maxHoldTimeMinutes: 5,
-  positionSize: 1,
+  minVolume: 2,
+  minPriceChangePercent: 2,
+  maxPriceChangePercent: 30,
+  stopLossPercent: 1.5,
+  takeProfitPercent: 4,
+  maxHoldTimeMinutes: 3,
+  positionSize: 0.5,
+  minTradeCount5s: 3,
+  minPriceChange5sPercent: 1,
+  maxDropFromHighestPercent: 15,
+  minBuySellRatio: 1.5,
+  minBuySellCountRatio: 1.2,
+  minVolumeTrendRatio: 1.2,
+  maxVolatility30s: 15,
+  sharpDropThresholdPercent: 15,
+  gradualDropThresholdPercent: 5,
+  crashThresholdPercent: 20,
+  pumpThresholdPercent: 20,
+  minTradeFrequency1m: 5,
+  minSolAmountFilter: 0.01,
+  enableRealTimeSave: true,
+  trailingStopPercent: 1,
+  enableTrailingStop: true,
+  partialTakeProfitPercent: 2,
+  enablePartialTakeProfit: true,
+  partialSellRatio: 0.5,
+  crashStopMultiplier: 0.5,
+  pumpSellDelayMs: 2000,
 };
 
 export const config: Config = {
@@ -40,7 +82,7 @@ export const config: Config = {
     token: process.env.GRPC_TOKEN || '',
   },
   strategy: defaultStrategy,
-  analysisIntervalMinutes: 10,
+  analysisIntervalMinutes: 5,
 };
 
 export function validateConfig(): boolean {

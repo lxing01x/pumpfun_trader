@@ -78,7 +78,13 @@ export class TradeRecordManager {
     };
 
     this.currentSession.trades.push(tradeRecord);
-    console.log(`Recorded BUY: ${position.tokenSymbol} at ${position.entryPrice}`);
+    
+    const shortMint = position.tokenMint.length > 8 
+      ? `${position.tokenMint.substring(0, 4)}...${position.tokenMint.substring(position.tokenMint.length - 4)}` 
+      : position.tokenMint;
+    console.log(`Recorded BUY: ${shortMint} at ${position.entryPrice.toExponential(4)}`);
+    
+    this.saveCurrentSession();
   }
 
   public recordSell(closedPosition: ClosedPosition): void {
@@ -116,10 +122,32 @@ export class TradeRecordManager {
     }
 
     this.updateSessionMetrics();
+    
+    const shortMint = closedPosition.tokenMint.length > 8 
+      ? `${closedPosition.tokenMint.substring(0, 4)}...${closedPosition.tokenMint.substring(closedPosition.tokenMint.length - 4)}` 
+      : closedPosition.tokenMint;
     console.log(
-      `Recorded SELL: ${closedPosition.tokenSymbol} at ${closedPosition.exitPrice}, ` +
-      `P/L: ${closedPosition.profitLossPercent.toFixed(2)}%`
+      `Recorded SELL: ${shortMint} at ${closedPosition.exitPrice.toExponential(4)}, ` +
+      `P/L: ${closedPosition.profitLossPercent.toFixed(2)}%, Reason: ${closedPosition.exitReason}`
     );
+    
+    this.saveCurrentSession();
+  }
+
+  private saveCurrentSession(): void {
+    if (!this.currentSession) return;
+    
+    const filePath = path.join(this.dataDir, `${this.currentSession.sessionId}.json`);
+    
+    try {
+      fs.writeFileSync(
+        filePath,
+        JSON.stringify(this.currentSession, null, 2),
+        'utf8'
+      );
+    } catch (error) {
+      console.error('Failed to save session in real-time:', error);
+    }
   }
 
   private updateSessionMetrics(): void {
