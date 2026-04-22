@@ -40,6 +40,10 @@ export interface SessionStatistics {
   averageProfit: number;
   averageLoss: number;
   averageHoldTimeMinutes: number;
+  totalOpenPositions: number;
+  totalBuyTrades: number;
+  totalInvestment: number;
+  totalBuyFees: number;
 }
 
 export interface TradingSession {
@@ -93,6 +97,10 @@ export class TradeRecordManager {
         averageProfit: 0,
         averageLoss: 0,
         averageHoldTimeMinutes: 0,
+        totalOpenPositions: 0,
+        totalBuyTrades: 0,
+        totalInvestment: 0,
+        totalBuyFees: 0,
       },
     };
 
@@ -122,6 +130,7 @@ export class TradeRecordManager {
     
     console.log(`Recorded BUY: ${position.tokenMint} at ${position.entryPrice.toExponential(4)}`);
     
+    this.updateSessionMetrics();
     this.saveCurrentSession();
   }
 
@@ -202,8 +211,15 @@ export class TradeRecordManager {
   private updateSessionMetrics(): void {
     if (!this.currentSession) return;
 
-    const closedTrades = this.currentSession.trades.filter(t => t.status === 'closed');
+    const allTrades = this.currentSession.trades;
+    const closedTrades = allTrades.filter(t => t.status === 'closed');
+    const openTrades = allTrades.filter(t => t.status === 'open');
     const totalTrades = closedTrades.length;
+    const totalBuyTrades = allTrades.length;
+
+    const totalOpenPositions = openTrades.length;
+    const totalInvestment = allTrades.reduce((sum, t) => sum + (t.entryPrice * t.amount), 0);
+    const totalBuyFees = allTrades.reduce((sum, t) => sum + (t.buyFeeAmount || 0), 0);
 
     if (totalTrades === 0) {
       this.currentSession.totalProfitLoss = 0;
@@ -222,7 +238,20 @@ export class TradeRecordManager {
         averageProfit: 0,
         averageLoss: 0,
         averageHoldTimeMinutes: 0,
+        totalOpenPositions,
+        totalBuyTrades,
+        totalInvestment,
+        totalBuyFees,
       };
+      console.log('\n' + '='.repeat(60));
+      console.log('SESSION STATISTICS UPDATED');
+      console.log('='.repeat(60));
+      console.log(`Total Buy Trades: ${totalBuyTrades}`);
+      console.log(`Open Positions: ${totalOpenPositions}`);
+      console.log(`Total Investment: ${totalInvestment.toFixed(6)} SOL`);
+      console.log(`Total Buy Fees: ${totalBuyFees.toFixed(6)} SOL`);
+      console.log('No closed trades yet.');
+      console.log('='.repeat(60) + '\n');
       return;
     }
 
@@ -276,12 +305,20 @@ export class TradeRecordManager {
       averageProfit,
       averageLoss,
       averageHoldTimeMinutes,
+      totalOpenPositions,
+      totalBuyTrades,
+      totalInvestment,
+      totalBuyFees,
     };
 
     console.log('\n' + '='.repeat(60));
     console.log('SESSION STATISTICS UPDATED');
     console.log('='.repeat(60));
-    console.log(`Total Trades: ${totalTrades}`);
+    console.log(`Total Buy Trades: ${totalBuyTrades}`);
+    console.log(`Open Positions: ${totalOpenPositions}`);
+    console.log(`Total Investment: ${totalInvestment.toFixed(6)} SOL`);
+    console.log(`Total Buy Fees: ${totalBuyFees.toFixed(6)} SOL`);
+    console.log(`Total Closed Trades: ${totalTrades}`);
     console.log(`Winning: ${winningTrades.length}, Losing: ${losingTrades.length}`);
     console.log(`Win Rate: ${winRate.toFixed(2)}%`);
     console.log(`Profit Factor: ${profitFactor.toFixed(2)}`);
